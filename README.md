@@ -80,3 +80,7 @@ rbnx boot -f robonix_manifest.yaml
 `tests/full_stack.py` 在独立 Docker 中运行真实 `rbnx build/boot` 和 Atlas，两个真实原语驱动从伪串口读合成字节，再由本服务与真实 Nav2 完成虚拟导航。不挂载或导入旧 outdoorNav，不修改现有网页测试服务。
 
 完整独立运行验证与未验证硬件项见 [VALIDATION.md](docs/VALIDATION.md)。本地兼容 manifest 适配所验证 SDK 的命名空间 Driver；部署只选择一种生命周期入口。
+
+## Loaded outdoor map reference
+
+Deploy with `require_map_reference: true` and an unbound placeholder origin. The worker emits status but no odometry or TF until Scene supplies `map_id`, `map_version` and the saved map origin through Driver INIT, then ACTIVATE. Changed configuration restarts the worker. Loading a Beijing map therefore uses its own origin; no Hangzhou bundle is required. Navigation checks the live reference before accepting a route.

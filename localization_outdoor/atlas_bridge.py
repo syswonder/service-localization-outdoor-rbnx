@@ -60,7 +60,9 @@ def init(raw):
     try:
         checked = validate(raw)
         if worker is not None and worker.poll() is None:
-            return Ok()
+            if checked == config:
+                return Ok()
+            cleanup()
         bindings = dict(checked.get("topic_remap", {}))
         for role, (provider_role, contract) in CONTRACTS.items():
             if role in bindings:

@@ -148,20 +148,23 @@ class Localizer(Node):
         now = time.monotonic()
         e = self.inputs.engine
         c = self.config
-        ready = e.ready(now) and self.active and not self.conflict
-        sample = e.sample(now)
+        bound = not c["require_map_reference"] or bool(c.get("map_id"))
+        ready = bound and e.ready(now) and self.active and not self.conflict
+        sample = e.sample(now) if bound else None
         return {
             "ready": bool(ready),
             "coordinate_reference": {
                 "frame_id": "map",
                 "axes": "east_north",
-                "origin_wgs84": dict(c["origin"]),
+                "origin_wgs84": dict(c["origin"]) if bound else None,
+                "map_id": c.get("map_id"),
+                "version": c.get("map_version"),
                 "reference_point": "base_link",
                 "map_offset_xy_m": list(c["map_offset_xy_m"]),
                 "antenna_xy_m": list(c["antenna_xy_m"]),
             },
             "grade": e.grade,
-            "fault": e.fault
+            "fault": ("Load an outdoor map to bind localization" if not bound else None) or e.fault
             or (None if ready else self.inputs.reason or "localization_unready"),
             "ownership_conflict": self.conflict,
             "active": self.active,
@@ -203,6 +206,9 @@ class Localizer(Node):
 
     def tick(self):
         now = time.monotonic()
+        if self.config["require_map_reference"] and not self.config.get("map_id"):
+            self.status_pub.publish(String(data=json.dumps(self.snapshot(), allow_nan=False)))
+            return
         self.inputs.step(now)
         e = self.inputs.engine
         if self.count_publishers(self.odom.topic_name) > 1:

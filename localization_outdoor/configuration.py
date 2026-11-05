@@ -1,6 +1,7 @@
 """No device paths, NTRIP, vendor decoder or business map dependency."""
 
 import math
+import re
 import numpy as np
 
 DEFAULTS = {
@@ -14,6 +15,7 @@ DEFAULTS = {
     "calibrated": False,
     "antenna_offset_confirmed": False,
     "feedback_confirmed": False,
+    "require_map_reference": False,
     "velocity_accuracy_mps": None,
     "velocity_accuracy_confirmed": False,
     "antenna_xy_m": [0.0, 0.0],
@@ -64,6 +66,8 @@ def validate(raw):
         "run_dir",
         "http_port",
         "worker_python",
+        "map_id",
+        "map_version",
     }
     if set(raw) - allowed:
         raise ValueError("Unknown configuration fields")
@@ -73,6 +77,12 @@ def validate(raw):
         "imu": {**DEFAULTS["imu"], **raw.get("imu", {})},
         "output_topics": {**DEFAULTS["output_topics"], **raw.get("output_topics", {})},
     }
+    if raw.get("map_id") or raw.get("map_version"):
+        if (not isinstance(raw.get("map_id"), str)
+                or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", raw["map_id"])
+                or not isinstance(raw.get("map_version"), str)
+                or not re.fullmatch(r"[a-f0-9]{16,64}", raw["map_version"])):
+            raise ValueError("Map ID and content version must be supplied together")
     o = c.get("origin")
     if (
         not isinstance(o, dict)
@@ -134,8 +144,6 @@ def validate(raw):
         raise ValueError("Invalid velocity uncertainty")
     if c["velocity_accuracy_confirmed"] and c["velocity_accuracy_mps"] is None:
         raise ValueError("A verified velocity bound is required")
-    import re
-
     for t in [*c["output_topics"].values(), *c.get("topic_remap", {}).values()]:
         if not isinstance(t, str) or not re.fullmatch(
             r"/[A-Za-z_][A-Za-z0-9_]*(/[A-Za-z_][A-Za-z0-9_]*)*", t

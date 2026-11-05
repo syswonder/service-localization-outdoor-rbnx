@@ -27,6 +27,15 @@ def config():
     )
 
 
+def test_loaded_map_reference_validation():
+    bound = {**config(), 'map_id':'beijing-v1', 'map_version':'a'*16,
+             'require_map_reference':True, 'origin':{'latitude':39.9042,'longitude':116.4074}}
+    assert validate(bound)['map_id'] == 'beijing-v1'
+    for bad in ({'map_version':None}, {'map_id':'../map'}):
+        with pytest.raises(ValueError):
+            validate({**bound, **bad})
+
+
 def header(now, frame="imu"):
     return S(
         stamp=S(sec=int(now), nanosec=round((now - int(now)) * 1e9)), frame_id=frame

@@ -4,6 +4,16 @@ properties:
   origin:
     type: object
     description: Explicit fixed WGS84 map datum with latitude and longitude. Never inferred from the first fix.
+  require_map_reference:
+    type: boolean
+    default: false
+    description: Suppress odometry and TF until a saved map identity is supplied.
+  map_id:
+    type: string
+    description: Loaded immutable outdoor map ID, supplied together with map_version.
+  map_version:
+    type: string
+    description: Loaded map content hash. Scene reinitializes the existing Driver with its origin and identity.
   provider_ids:
     type: object
     properties:
