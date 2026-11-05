@@ -1,0 +1,44 @@
+# Merge into a robot deployment. Sensor paths and calibration belong to that deployment.
+primitive:
+  - name: g70_gnss
+    url: https://github.com/syswonder/primitive-g70-gnss-rbnx
+    branch: main
+    manifest: package_manifest.namespace-driver.yaml
+    config:
+      require_velocity: true
+      # serial.port is required or must resolve uniquely; never guess arbitrary ttyUSB.
+  - name: wit_imu
+    url: https://github.com/syswonder/primitive-wit-imu-rbnx
+    branch: main
+    manifest: package_manifest.namespace-driver.yaml
+    config: {}
+service:
+  - name: localization_outdoor
+    path: ./services/service-localization-outdoor-rbnx
+    config:
+      # Datum of the existing north-campus map only; measure/configure a new datum for other sites.
+      origin:
+        latitude: 30.22413029
+        longitude: 120.25979315833334
+      provider_ids:
+        gnss: g70_gnss
+        imu: wit_imu
+      calibrated: false
+      antenna_offset_confirmed: false
+      feedback_confirmed: false
+      velocity_accuracy_confirmed: false
+      output_topics:
+        tf: /localization/tf
+  - name: outdoor_execution
+    url: https://github.com/syswonder/service-navigation-outdoor-rbnx
+    branch: main
+    config:
+      params_file: config/outdoor_nav2.yaml
+      provider_ids:
+        cloud: front_lidar
+        localization: localization_outdoor
+      topic_remap:
+        tf: /localization/tf
+      velocity_output_topic: /robonix/nomotion/outdoor_cmd_vel
+      policy:
+        motion_enabled: false

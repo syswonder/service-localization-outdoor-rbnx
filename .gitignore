@@ -1,0 +1,11 @@
+/rbnx-build/
+/.venv/
+/.pytest_cache/
+__pycache__/
+*.pyc
+*.egg-info/
+
+**/rbnx-build/
+**/rbnx-boot/
+/logs/
+**/logs/

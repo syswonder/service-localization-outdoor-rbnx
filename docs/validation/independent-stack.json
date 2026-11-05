@@ -1,0 +1,497 @@
+{
+  "passed": true,
+  "hardware": false,
+  "old_repository_imported": false,
+  "framework_boot": true,
+  "scenarios": [
+    {
+      "name": "arrival_from_managed_primitives",
+      "state": "succeeded",
+      "x": 5.290937155974826,
+      "commands": 265
+    },
+    {
+      "name": "cancel",
+      "state": "canceled"
+    },
+    {
+      "name": "heading_loss_measured_stop_and_recovery",
+      "state": "passed"
+    },
+    {
+      "name": "recovered_task",
+      "state": "succeeded"
+    }
+  ],
+  "discovered_provider": "outdoor_execution",
+  "last_state": {
+    "x": 9.645726332657238,
+    "y": -0.010479893954583708,
+    "yaw": 0.010114654539358102,
+    "v": 0.0,
+    "w": 0.0,
+    "commands": 489,
+    "faults": {
+      "gnss": false,
+      "heading": false,
+      "gyro": false
+    }
+  },
+  "localization_snapshot": {
+    "ready": true,
+    "grade": "fixed",
+    "fault": null,
+    "ownership_conflict": false,
+    "active": true,
+    "diagnostic": {
+      "input_reason": null,
+      "estimator_reason": null,
+      "fix_at": 1723857.0740558328,
+      "stable_since": 1723798.5740632662,
+      "velocity_valid": true,
+      "initialized": true,
+      "input_ages": {
+        "imu": 0.039825901156291366,
+        "gyro": 0.03998111211694777,
+        "rtk_status": 0.10955352103337646,
+        "gnss_fix": 0.08980263443663716,
+        "gnss_velocity": 0.08967454987578094,
+        "imu_status": 0.878551839850843
+      }
+    },
+    "heading": {
+      "ready": true,
+      "source": "imu_primitive",
+      "body_yaw_enu_rad": 0.01006674892049952,
+      "angle_age_s": 0.039825901156291366
+    },
+    "feedback": {
+      "ready": true,
+      "confirmed": true,
+      "source": "g70_rmc_ground_velocity+imu_gyro",
+      "velocity_accuracy_source": "deployment_verified_bound",
+      "speed_accuracy_mps": 0.02
+    },
+    "position_source": "gnss_primitive",
+    "position_uncertainty_source": "receiver_GST",
+    "velocity_source": "receiver_RMC_ground_velocity_not_claimed_doppler",
+    "extrinsics": {
+      "ready": true
+    },
+    "pose": {
+      "x": 9.64580541196018,
+      "y": -0.010531342176285003,
+      "yaw": 0.01006674892049952
+    }
+  },
+  "navigation_snapshot": {
+    "schema_version": 1,
+    "ready": true,
+    "health": {
+      "lidar": true,
+      "global_map": true,
+      "local_map": true,
+      "localization": true,
+      "heading": true,
+      "calibration": true,
+      "motion_enabled": true,
+      "chassis": true,
+      "production_mode": true,
+      "sensor_extrinsics": true,
+      "service_active": true,
+      "controller_stopped": true,
+      "odometry": true,
+      "actions": true,
+      "exclusive_owners": true,
+      "command_guard": true,
+      "planner_server": true,
+      "controller_server": true,
+      "tf": true
+    },
+    "localization_grade": "fixed",
+    "heading": {
+      "ready": true,
+      "source": "imu_primitive",
+      "body_yaw_enu_rad": 0.01006674892049952,
+      "angle_age_s": 0.021039057290181518
+    },
+    "feedback": {
+      "ready": true,
+      "confirmed": true,
+      "source": "g70_rmc_ground_velocity+imu_gyro",
+      "velocity_accuracy_source": "deployment_verified_bound",
+      "speed_accuracy_mps": 0.02
+    },
+    "pose": {
+      "frame_id": "map",
+      "x": 9.645805411960183,
+      "y": -0.010531342176285,
+      "yaw": 0.010066748920499522,
+      "stamp_s": 1793850508.0376184,
+      "age_s": 0.04114103317260742
+    },
+    "command_topic": "/stack/virtual_cmd_vel",
+    "not_ready_reasons": [],
+    "measured_velocity": [
+      0.0,
+      0.0
+    ],
+    "velocity_fresh": true,
+    "task": {
+      "task_id": "dddddddddddddddddddddddddddddddd",
+      "goal": {
+        "x": 12.365905971915794,
+        "y": 0.0
+      },
+      "blocked_road_ids": [],
+      "schema_version": 1,
+      "frame_id": "map",
+      "scene_version": null,
+      "route_version": null,
+      "completed_sim_s": 1793850508.065054,
+      "completion_pose": {
+        "frame_id": "map",
+        "x": 9.645805411960183,
+        "y": -0.010531342176285,
+        "yaw": 0.010066748920499522,
+        "stamp_s": 1793850508.0376184,
+        "age_s": 0.02740168571472168
+      },
+      "state": "succeeded",
+      "path_revision": 4,
+      "execution_path": [
+        {
+          "x": 8.3,
+          "y": 0.0
+        },
+        {
+          "x": 8.400000000000002,
+          "y": 0.0
+        },
+        {
+          "x": 8.45,
+          "y": 0.0
+        },
+        {
+          "x": 8.5,
+          "y": 0.0
+        },
+        {
+          "x": 8.55,
+          "y": 0.0
+        },
+        {
+          "x": 8.600000000000001,
+          "y": 0.0
+        },
+        {
+          "x": 8.650000000000002,
+          "y": 0.0
+        },
+        {
+          "x": 8.7,
+          "y": 0.0
+        },
+        {
+          "x": 8.75,
+          "y": 0.0
+        },
+        {
+          "x": 8.8,
+          "y": 0.0
+        },
+        {
+          "x": 8.850000000000001,
+          "y": 0.0
+        },
+        {
+          "x": 8.900000000000002,
+          "y": 0.0
+        },
+        {
+          "x": 8.95,
+          "y": 0.0
+        },
+        {
+          "x": 9.0,
+          "y": 0.0
+        },
+        {
+          "x": 9.05,
+          "y": 0.0
+        },
+        {
+          "x": 9.100000000000001,
+          "y": 0.0
+        },
+        {
+          "x": 9.150000000000002,
+          "y": 0.0
+        },
+        {
+          "x": 9.200000000000003,
+          "y": 0.0
+        },
+        {
+          "x": 9.25,
+          "y": 0.0
+        },
+        {
+          "x": 9.3,
+          "y": 0.0
+        },
+        {
+          "x": 9.350000000000001,
+          "y": 0.0
+        },
+        {
+          "x": 9.400000000000002,
+          "y": 0.0
+        },
+        {
+          "x": 9.450000000000003,
+          "y": 0.0
+        },
+        {
+          "x": 9.5,
+          "y": 0.0
+        },
+        {
+          "x": 9.55,
+          "y": 0.0
+        },
+        {
+          "x": 9.600000000000001,
+          "y": 0.0
+        },
+        {
+          "x": 9.650000000000002,
+          "y": 0.0
+        },
+        {
+          "x": 9.700000000000003,
+          "y": 0.0
+        },
+        {
+          "x": 9.75,
+          "y": 0.0
+        },
+        {
+          "x": 9.8,
+          "y": 0.0
+        },
+        {
+          "x": 9.850000000000001,
+          "y": 0.0
+        },
+        {
+          "x": 9.900000000000002,
+          "y": 0.0
+        },
+        {
+          "x": 9.950000000000003,
+          "y": 0.0
+        },
+        {
+          "x": 10.0,
+          "y": 0.0
+        },
+        {
+          "x": 10.05,
+          "y": 0.0
+        },
+        {
+          "x": 10.100000000000001,
+          "y": 0.0
+        },
+        {
+          "x": 10.150000000000002,
+          "y": 0.0
+        },
+        {
+          "x": 10.200000000000003,
+          "y": 0.0
+        },
+        {
+          "x": 10.25,
+          "y": 0.0
+        },
+        {
+          "x": 10.3,
+          "y": 0.0
+        },
+        {
+          "x": 10.350000000000001,
+          "y": 0.0
+        },
+        {
+          "x": 10.400000000000002,
+          "y": 0.0
+        },
+        {
+          "x": 10.5,
+          "y": 0.0
+        },
+        {
+          "x": 10.600000000000001,
+          "y": 0.0
+        },
+        {
+          "x": 10.615894058701526,
+          "y": -0.001986174059726246
+        },
+        {
+          "x": 10.700000000000003,
+          "y": 0.0
+        },
+        {
+          "x": 10.75,
+          "y": 0.0
+        },
+        {
+          "x": 10.8,
+          "y": 0.0
+        },
+        {
+          "x": 10.850000000000001,
+          "y": 0.0
+        },
+        {
+          "x": 10.900000000000002,
+          "y": 0.0
+        },
+        {
+          "x": 10.950000000000003,
+          "y": 0.0
+        },
+        {
+          "x": 11.0,
+          "y": 0.0
+        },
+        {
+          "x": 11.05,
+          "y": 0.0
+        },
+        {
+          "x": 11.100000000000001,
+          "y": 0.0
+        },
+        {
+          "x": 11.150000000000002,
+          "y": 0.0
+        },
+        {
+          "x": 11.200000000000003,
+          "y": 0.0
+        },
+        {
+          "x": 11.25,
+          "y": 0.0
+        },
+        {
+          "x": 11.3,
+          "y": 0.0
+        },
+        {
+          "x": 11.350000000000001,
+          "y": 0.0
+        },
+        {
+          "x": 11.400000000000002,
+          "y": 0.0
+        },
+        {
+          "x": 11.450000000000003,
+          "y": 0.0
+        },
+        {
+          "x": 11.5,
+          "y": 0.0
+        },
+        {
+          "x": 11.55,
+          "y": 0.0
+        },
+        {
+          "x": 11.600000000000001,
+          "y": 0.0
+        },
+        {
+          "x": 11.650000000000002,
+          "y": 0.0
+        },
+        {
+          "x": 11.700000000000003,
+          "y": 0.0
+        },
+        {
+          "x": 11.75,
+          "y": 0.0
+        },
+        {
+          "x": 11.8,
+          "y": 0.0
+        },
+        {
+          "x": 11.850000000000001,
+          "y": 0.0
+        },
+        {
+          "x": 11.900000000000002,
+          "y": 0.0
+        },
+        {
+          "x": 11.950000000000003,
+          "y": 0.0
+        },
+        {
+          "x": 12.0,
+          "y": 0.0
+        },
+        {
+          "x": 12.05,
+          "y": 0.0
+        },
+        {
+          "x": 12.100000000000001,
+          "y": 0.0
+        },
+        {
+          "x": 12.150000000000002,
+          "y": 0.0
+        },
+        {
+          "x": 12.200000000000003,
+          "y": 0.0
+        },
+        {
+          "x": 12.3,
+          "y": 0.0
+        },
+        {
+          "x": 12.365905971915794,
+          "y": 0.0
+        }
+      ],
+      "reference_path": [
+        {
+          "x": 5.3658583190587255,
+          "y": -0.007944696238904984
+        },
+        {
+          "x": 12.365905971915794,
+          "y": 0.0
+        }
+      ],
+      "distance_remaining_m": 2.7201209468402068,
+      "reason": null,
+      "cancel_requested": false,
+      "localization_grade": "fixed",
+      "arrival_tolerance_m": 3.0,
+      "road_offroad_cost": null
+    }
+  },
+  "marked_processes_requiring_final_kill": [],
+  "boot_returncode": 0,
+  "system_mode": "rbnx boot: real Atlas + Soma + managed primitives + services; no Scene or real hardware"
+}

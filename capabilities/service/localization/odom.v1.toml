@@ -1,0 +1,9 @@
+[contract]
+id = "robonix/service/localization/odom"
+version = "1"
+kind = "service"
+idl = "common_interfaces/nav_msgs/msg/Odometry.msg"
+description = "Outdoor localization odom, computed from primitive measurements"
+
+[mode]
+type = "topic_out"

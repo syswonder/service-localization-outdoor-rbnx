@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "service-localization-outdoor-rbnx"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["numpy<2", "PyYAML>=6"]
+
+[tool.setuptools.packages.find]
+include = ["localization_outdoor*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

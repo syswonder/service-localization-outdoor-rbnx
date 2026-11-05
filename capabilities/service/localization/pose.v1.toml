@@ -1,0 +1,9 @@
+[contract]
+id = "robonix/service/localization/pose"
+version = "1"
+kind = "service"
+idl = "common_interfaces/geometry_msgs/msg/PoseWithCovarianceStamped.msg"
+description = "Outdoor localization pose, computed from primitive measurements"
+
+[mode]
+type = "topic_out"

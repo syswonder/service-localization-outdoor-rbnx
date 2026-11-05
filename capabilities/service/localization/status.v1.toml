@@ -1,0 +1,9 @@
+[contract]
+id = "robonix/service/localization/status"
+version = "1"
+kind = "service"
+idl = "common_interfaces/std_msgs/msg/String.msg"
+description = "Outdoor localization status, computed from primitive measurements"
+
+[mode]
+type = "topic_out"

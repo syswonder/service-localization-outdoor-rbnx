@@ -1,0 +1,14 @@
+manifestVersion: 1
+package:
+  name: robonix.test.outdoor.virtual_inputs
+  version: 0.1.0
+  description: Docker-only synthetic serial GNSS/IMU and front cloud; no hardware
+    access.
+  license: MIT
+build: bash build.sh
+start: bash start.sh
+capabilities:
+- name: robonix/primitive/lidar/driver
+  transport: grpc
+- name: robonix/primitive/lidar/lidar3d
+  transport: ros2

@@ -1,0 +1,11 @@
+{
+  "origin_project": "Stone749990226/outdoorNav",
+  "source_file": "outdoornav/rtk_imu.py",
+  "source_sha256": "5b365ce1d5cc7f6bbadeb2ded50efb561486441297656f0a43a30ecfcbae2142",
+  "changes": [
+    "ROS primitive input adapter instead of raw device decoder",
+    "receiver-reported RMC ground velocity, not assumed Doppler",
+    "preserve separate message timestamps; accept bounded bidirectional angle/gyro pairing skew",
+    "accuracy requires same-epoch receiver covariance and an explicitly verified velocity bound"
+  ]
+}

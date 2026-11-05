@@ -1,0 +1,28 @@
+manifestVersion: 1
+package:
+  name: robonix.service.localization.outdoor
+  version: 0.1.0
+  description: Outdoor localization from GNSS and IMU primitive contracts, without
+    device I/O.
+  license: MIT
+  tags:
+  - service
+  - localization
+  - gnss
+  - imu
+build: bash scripts/build.sh
+start: bash scripts/start.sh
+stop: bash scripts/stop.sh
+capabilities:
+- name: robonix/service/localization/driver
+  transport: grpc
+  path: capabilities/driver.v1.toml
+- name: robonix/service/localization/odom
+  transport: ros2
+  path: capabilities/service/localization/odom.v1.toml
+- name: robonix/service/localization/pose
+  transport: ros2
+  path: capabilities/service/localization/pose.v1.toml
+- name: robonix/service/localization/status
+  transport: ros2
+  path: capabilities/service/localization/status.v1.toml

@@ -1,0 +1,9 @@
+[contract]
+id = "robonix/service/localization/driver"
+version = "1"
+kind = "service"
+idl = "lifecycle/srv/Driver.srv"
+description = "Explicit lifecycle compatibility with namespace-driver SDK"
+
+[mode]
+type = "rpc"

@@ -1,0 +1,39 @@
+specVersion: 1
+required: [origin]
+properties:
+  origin:
+    type: object
+    description: Explicit fixed WGS84 map datum with latitude and longitude. Never inferred from the first fix.
+  provider_ids:
+    type: object
+    properties:
+      gnss:
+        type: string
+        x-provider: robonix/primitive/gnss/fix
+      imu:
+        type: string
+        x-provider: robonix/primitive/imu/imu
+  topic_remap:
+    type: object
+    description: Explicit test/legacy bindings for gnss_fix,rtk_status,gnss_velocity,imu,gyro,imu_status; otherwise resolved through Atlas.
+  imu:
+    type: object
+    description: Measured mounting rotation, north correction, yaw uncertainty, timeout and confirmations. See configuration.py.
+  output_topics:
+    type: object
+    description: Odometry, map pose, readiness JSON, dynamic TF and TF-static topic names.
+  velocity_accuracy_mps:
+    type: number
+    description: Independently verified bound. RMC has no velocity uncertainty metadata; absent by default.
+  velocity_accuracy_confirmed:
+    type: boolean
+    default: false
+  calibrated:
+    type: boolean
+    default: false
+  antenna_offset_confirmed:
+    type: boolean
+    default: false
+  feedback_confirmed:
+    type: boolean
+    default: false
