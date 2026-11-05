@@ -15,10 +15,10 @@ primitive-wit-imu-rbnx ── Imu / gyro / status ──────────
 本仓需要配套的 G70 速度／GST 扩展、WIT 独立 gyro 扩展，以及导航服务的 localization 契约接入修改。
 
 - 导航服务对接已发布到 main：`18c14136774eaf091080662eae0bcbf7728a2f33`。
-- G70 扩展本地提交：`51178410149622f00096242975bb207c3abf77e4`，尚未发布。
+- G70 扩展已发布到 main：`1bc5c5d38e8cb2b55c2fc95bee87b860550e3de9`。
 - WIT 扩展本地提交：`1f56b1260abc344c454a9dfc01e0106b895b0d86`，尚未发布。
 
-当前验证报告对应上述配套版本；两个原语扩展发布前，不能直接按示例的远端 main 组合运行。
+当前验证报告对应上述配套版本；WIT 原语扩展发布前，不能直接按示例的远端 main 组合运行。
 原始依赖 commit 与验证源码指纹见 `docs/validation/source-manifest.json`。
 
 ## 输入契约
