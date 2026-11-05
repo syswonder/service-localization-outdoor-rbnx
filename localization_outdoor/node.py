@@ -152,6 +152,14 @@ class Localizer(Node):
         sample = e.sample(now)
         return {
             "ready": bool(ready),
+            "coordinate_reference": {
+                "frame_id": "map",
+                "axes": "east_north",
+                "origin_wgs84": dict(c["origin"]),
+                "reference_point": "base_link",
+                "map_offset_xy_m": list(c["map_offset_xy_m"]),
+                "antenna_xy_m": list(c["antenna_xy_m"]),
+            },
             "grade": e.grade,
             "fault": e.fault
             or (None if ready else self.inputs.reason or "localization_unready"),
@@ -179,13 +187,13 @@ class Localizer(Node):
             "feedback": {
                 "ready": e.feedback_ready(now),
                 "confirmed": c["feedback_confirmed"],
-                "source": "g70_rmc_ground_velocity+imu_gyro",
-                "velocity_accuracy_source": "deployment_verified_bound",
-                "speed_accuracy_mps": c["velocity_accuracy_mps"],
+                "source": str(self.inputs.values.get("rtk_status", ({},0))[0].get("velocity",{}).get("source", "unknown"))+"+imu_gyro",
+                "velocity_accuracy_source": "receiver_UBX_NAV_PVT" if self.inputs.values.get("rtk_status", ({},0))[0].get("velocity",{}).get("accuracy_source")=="UBX_NAV_PVT" else "deployment_verified_bound",
+                "speed_accuracy_mps": e.fix.get("speed_accuracy_mps") if e.fix else None,
             },
             "position_source": "gnss_primitive",
-            "position_uncertainty_source": "receiver_GST",
-            "velocity_source": "receiver_RMC_ground_velocity_not_claimed_doppler",
+            "position_uncertainty_source": self.inputs.values.get("rtk_status", ({},0))[0].get("position_covariance_source", "UNKNOWN"),
+            "velocity_source": self.inputs.values.get("rtk_status", ({},0))[0].get("velocity",{}).get("source", "UNKNOWN"),
             "extrinsics": {
                 "ready": c["antenna_offset_confirmed"]
                 and c["imu"]["mounting_confirmed"]
@@ -225,7 +233,7 @@ class Localizer(Node):
                 math.radians(self.config["imu"]["yaw_std_deg"] or 180) ** 2
             )
             o.twist.covariance[0] = o.twist.covariance[7] = (
-                self.config["velocity_accuracy_mps"] ** 2
+                e.fix["speed_accuracy_mps"] ** 2
             )
             o.twist.covariance[35] = 1e6
             for i in (14, 21, 28):

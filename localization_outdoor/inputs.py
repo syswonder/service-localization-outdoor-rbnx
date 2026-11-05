@@ -90,7 +90,12 @@ class Inputs:
                 self.invalidate(
                     "position_uncertainty_unknown; require receiver GST or equivalent"
                 )
-            elif not c["velocity_accuracy_confirmed"]:
+            elif not (
+                v.get("accuracy_source") == "UBX_NAV_PVT"
+                and isinstance(v.get("accuracy_mps"), (int, float))
+                and not isinstance(v.get("accuracy_mps"), bool)
+                and math.isfinite(v["accuracy_mps"]) and v["accuracy_mps"] > 0
+            ) and not c["velocity_accuracy_confirmed"]:
                 self.invalidate(
                     "velocity_accuracy_unverified; receiver RMC does not report uncertainty"
                 )
@@ -107,15 +112,21 @@ class Inputs:
                             raise ValueError("Invalid UTC")
                         return h * 3600 + m * 60 + s
 
-                    epoch = utc(rtk.get("utc_time"))
-                    if abs(epoch - utc(v.get("utc_time"))) > 0.001:
-                        raise ValueError("Position/velocity epochs differ")
-                    if self.last_epoch is not None and epoch < self.last_epoch:
-                        if self.last_epoch > 86399 and epoch < 1:
-                            self.day += 1
-                        else:
-                            raise ValueError("Receiver epoch reversed")
-                    self.last_epoch = epoch
+                    if rtk.get("epoch_source") == "UBX_iTOW_ms":
+                        tow=rtk.get("measurement_id")
+                        if type(tow) is not int or tow!=v.get("measurement_id"):
+                            raise ValueError("Position/velocity measurement IDs differ")
+                    else:
+                        epoch = utc(rtk.get("utc_time"))
+                        if abs(epoch - utc(v.get("utc_time"))) > 0.001:
+                            raise ValueError("Position/velocity epochs differ")
+                        if self.last_epoch is not None and epoch < self.last_epoch:
+                            if self.last_epoch > 86399 and epoch < 1:
+                                self.day += 1
+                            else:
+                                raise ValueError("Receiver epoch reversed")
+                        self.last_epoch = epoch
+                        tow=round((self.day*86400+epoch)*1000)
                     cov = fix.position_covariance
                     if not all(math.isfinite(cov[i]) and cov[i] > 0 for i in (0, 4)):
                         raise ValueError("Invalid covariance")
@@ -131,8 +142,8 @@ class Inputs:
                         "correction_age_s": rtk.get("differential_age_s"),
                         "vel_e_mps": velocity.twist.linear.x,
                         "vel_n_mps": velocity.twist.linear.y,
-                        "speed_accuracy_mps": c["velocity_accuracy_mps"],
-                        "tow_ms": round((self.day * 86400 + epoch) * 1000),
+                        "speed_accuracy_mps": v["accuracy_mps"] if v.get("accuracy_source")=="UBX_NAV_PVT" else c["velocity_accuracy_mps"],
+                        "tow_ms": tow,
                     }
                     e.update_fix(p, fix_at)
                     self.reason = e.reason
@@ -178,7 +189,7 @@ class Inputs:
                         math.atan2(world_body[1, 0], world_body[0, 0])
                         - c["imu"]["magnetic_declination_rad"]
                     )
-        ready = body_yaw is not None and c["imu"]["quality_confirmed"]
+        ready = body_yaw is not None and (c["imu"]["quality_confirmed"] or c["imu"]["course_heading"])
         observation = {
             "ready": ready,
             "body_yaw_enu_rad": body_yaw,

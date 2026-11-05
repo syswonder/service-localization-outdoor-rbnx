@@ -33,7 +33,7 @@ def header(now, frame="imu"):
     )
 
 
-def feed(data, t, epoch="120000.00", speed=0.0):
+def feed(data, t, epoch="120000.00", speed=0.0, receiver_accuracy=None):
     t = round(t, 9)
     fix = S(
         header=header(t, "gnss"),
@@ -52,6 +52,9 @@ def feed(data, t, epoch="120000.00", speed=0.0):
         "fix_stamp_s": t,
         "velocity": {"fresh": True, "age_s": 0.0, "utc_time": epoch, "stamp_s": t},
     }
+    if receiver_accuracy is not None:
+        rtk.update(epoch_source='UBX_iTOW_ms',measurement_id=round(t*1000))
+        rtk['velocity'].update(measurement_id=round(t*1000),accuracy_source='UBX_NAV_PVT',accuracy_mps=receiver_accuracy)
     velocity = S(header=header(t, "gnss_enu"), twist=S(linear=S(x=speed, y=0.0)))
     imu = S(
         header=header(t),
@@ -128,3 +131,11 @@ def test_bad_configuration_rejected():
     ):
         with pytest.raises(ValueError):
             validate({**{"origin": {"latitude": 30.0, "longitude": 120.0}}, **change})
+
+
+def test_reported_pvt_accuracy_does_not_need_a_fabricated_deployment_bound():
+    c=config();c['velocity_accuracy_confirmed']=False;c['velocity_accuracy_mps']=None
+    d=Inputs(c)
+    feed(d,10.,receiver_accuracy=.02)
+    feed(d,10.2,receiver_accuracy=.02)
+    assert d.engine.ready(10.2) and d.engine.fix['speed_accuracy_mps']==.02
