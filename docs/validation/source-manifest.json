@@ -60,8 +60,8 @@
       "published": true
     },
     "primitive-wit-imu-rbnx": {
-      "commit": "1f56b1260abc344c454a9dfc01e0106b895b0d86",
-      "published": false
+      "commit": "2df8f8537a17ac86366009b74076c19c9471707c",
+      "published": true
     }
   }
 }

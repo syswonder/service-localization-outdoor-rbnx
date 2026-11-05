@@ -16,9 +16,9 @@ primitive-wit-imu-rbnx ── Imu / gyro / status ──────────
 
 - 导航服务对接已发布到 main：`18c14136774eaf091080662eae0bcbf7728a2f33`。
 - G70 扩展已发布到 main：`1bc5c5d38e8cb2b55c2fc95bee87b860550e3de9`。
-- WIT 扩展本地提交：`1f56b1260abc344c454a9dfc01e0106b895b0d86`，尚未发布。
+- WIT 扩展已发布到 main：`2df8f8537a17ac86366009b74076c19c9471707c`。
 
-当前验证报告对应上述配套版本；WIT 原语扩展发布前，不能直接按示例的远端 main 组合运行。
+当前验证报告对应上述配套版本；上述配套扩展现已发布；真实部署仍须配置实际设备、安装与精度参数，不能把虚拟验证视为实机验收。
 原始依赖 commit 与验证源码指纹见 `docs/validation/source-manifest.json`。
 
 ## 输入契约
