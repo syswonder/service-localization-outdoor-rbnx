@@ -49,5 +49,19 @@
     "primitive-wit-imu-rbnx/capabilities/magnetic_raw.v1.toml": "6a814670652bc35446790b67dcdf8e91ca45c3d2ad6eaff89e7dc395c24534e5",
     "primitive-wit-imu-rbnx/capabilities/pressure.v1.toml": "ae110ac5f1aaa5990e81ca6b07b3995d1deaa5872119ad1400b074ed1e6ca451",
     "primitive-wit-imu-rbnx/capabilities/status.v1.toml": "8af10253617243f23b0bfc46e51f89d0e6d17f56273327d3509343ffd746064c"
+  },
+  "companion_revisions": {
+    "service-navigation-outdoor-rbnx": {
+      "commit": "18c14136774eaf091080662eae0bcbf7728a2f33",
+      "published": true
+    },
+    "primitive-g70-gnss-rbnx": {
+      "commit": "51178410149622f00096242975bb207c3abf77e4",
+      "published": false
+    },
+    "primitive-wit-imu-rbnx": {
+      "commit": "1f56b1260abc344c454a9dfc01e0106b895b0d86",
+      "published": false
+    }
   }
 }
