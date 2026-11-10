@@ -47,3 +47,10 @@ properties:
   feedback_confirmed:
     type: boolean
     default: false
+  estimator_mode:
+    type: string
+    default: legacy
+    description: legacy receiver-velocity mode or eskf inertial fusion; eskf requires the inertial primitive capability.
+  fusion:
+    type: object
+    description: Static initialization (5s), replay history (at most 2s), IMU position in base axes, noise densities/bias random walks and navigation uncertainty limits; see configuration.py.

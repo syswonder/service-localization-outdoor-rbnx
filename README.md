@@ -8,7 +8,7 @@ primitive-g70-gnss-rbnx  ── fix / RTK status / receiver velocity ──┐
 primitive-wit-imu-rbnx ── Imu / gyro / status ────────────────────┘
 ```
 
-运行不依赖旧 outdoorNav 工程，不打开串口、不处理 NMEA/UBX/WIT 字节、不连接 NTRIP，不订阅山猫 `/ODOM`，不订阅控制指令，不通过积分加速度或相减 GNSS 位置冒充速度。当前网页保持在原业务侧，未来由 Scene 消费定位和导航能力，本文不实现新前端。
+运行不依赖旧 outdoorNav 工程，不打开串口、不处理 NMEA/UBX/WIT 字节、不连接 NTRIP，不订阅山猫 `/ODOM`，不订阅控制指令。旧 `legacy` 模式不积分加速度；新 `eskf` 模式明确输出惯性估计速度，不将其标为接收机实测速度。Scene 通过导航服务读取融合状态和计时，定位服务只提供数据。
 
 ## 配套版本状态
 
@@ -54,7 +54,7 @@ G70 原语需要本轮扩展：解析接收机已有的 RMC 输出水平地速�
 - `robonix/service/localization/status`：String JSON，就绪、RTK 等级、航向/速度有效性、故障与来源。
 - 独占动态 TF：`map→odom` 和 `odom→base_link`。TF 话题由部署配置绑定，不与其他定位器重复发布。
 
-地图校正由接受的 GNSS 位置与已修正 IMU 航向提供；局部里程仅积分接收机地速和 gyro。停用时就绪状态立即撤回；测量仍可用于停车反馈。TF 重复所有者与异常跳变会停止全局就绪。
+地图校正由接受的 GNSS 位置与已修正 IMU 航向提供；旧模式局部里程积分接收机地速和 gyro；新模式见下文。停用时就绪状态立即撤回；测量仍可用于停车反馈。TF 重复所有者与异常跳变会停止全局就绪。
 
 ## 配置与部署
 
@@ -84,3 +84,30 @@ rbnx boot -f robonix_manifest.yaml
 ## Loaded outdoor map reference
 
 Deploy with `require_map_reference: true` and an unbound placeholder origin. The worker emits status but no odometry or TF until Scene supplies `map_id`, `map_version` and the saved map origin through Driver INIT, then ACTIVATE. Changed configuration restarts the worker. Loading a Beijing map therefore uses its own origin; no Hangzhou bundle is required. Navigation checks the live reference before accepting a route.
+
+## RTK＋惯导融合
+
+部署设 `estimator_mode: eskf`，IMU 原语设 `device_profile: inertial` 和 `serial.baud: 115200`。
+必须提供新 inertial 能力；不会缺失时自动退回旧算法。磁航向的安装、北向和质量仍需确认，
+不能用 `course_heading` 演示开关替代；未确认时保持初始化状态，状态会说明原因。
+
+内部使用三维 15 状态误差滤波器。IMU 加速度去重力后积分，RTK 水平位置/速度校正，
+磁航向辅助校正。初始连续静止 5 秒且有效固定/浮点解稳定 2 秒后输出；移动则重新采样。
+IMU 位置用 `fusion.imu_xyz_m`（base_link 坐标中的三维米值），天线沿用 `antenna_xy_m`。
+第一版不使用 GNSS 高程或气压，不声称楼层定位；旧地图无需迁移。
+
+固定解/浮点解按报告误差融合；失锁后阶段为 inertial，持续输出估计且误差增长，无固定失锁秒数。
+固定解恢复后对齐位置和有效速度，保留姿态与偏差；浮点解恢复按权重纠正。保留数据时间和精度
+检查，不因与漂移惯导相距较远拒绝固定解。延迟数据最多回放 2 秒，重复/过期数据不重新积分。
+IMU 断流、重连或队列溢出撤销就绪并重新初始化。
+
+`fusion` 状态含 stage、estimate_valid、navigation_ready、uncertainty、outage_s、recovery_id。
+rtk_grade 单独报告新鲜接收机固定/浮点解；inertial_elapsed_s 为本次惯导时长。
+fusion_elapsed_s 从最近一次接受的固定解计时，每条新固定解归零；尚无固定解时从初始化计时。
+估计仍可用而误差超限时继续发 pose/TF，但 ready=false；默认水平 2σ≤3m、航向 2σ≤30°。
+位置/速度协方差来自滤波器，速度来源明确为 inertial_estimate。噪声密度和偏差随机游走
+默认值仅为初始参数，必须用实际运动记录校验；不是设备精度承诺。
+
+现有导航只允许纯惯导继续已有任务；新任务等 RTK，惯导到终点先停车等 RTK 确认，
+超出现有恢复等待时间则任务失败。恢复校正先撤回控制、释放旧 FollowPath，再重规划。
+保留旧模式：`estimator_mode: legacy`，并同步将 IMU 改回 legacy 设备档位。

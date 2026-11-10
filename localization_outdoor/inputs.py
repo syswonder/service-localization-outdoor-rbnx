@@ -1,6 +1,7 @@
 """ROS-shaped observations -> estimator input. Never reads device bytes."""
 
 import math
+from collections import deque
 import numpy as np
 from .geometry import quaternion_matrix, wrap
 from .estimator import RtkImuFeedback
@@ -13,7 +14,12 @@ def seconds(stamp):
 class Inputs:
     def __init__(self, config):
         self.config = config
-        self.engine = RtkImuFeedback(config["origin"], config)
+        from .fusion import FusionFeedback
+        engine = FusionFeedback if config["estimator_mode"] == "eskf" else RtkImuFeedback
+        self.engine = engine(config["origin"], config)
+        self.inertial_queue = deque()
+        self.last_inertial_stamp = -math.inf
+        self.imu_generation = None
         self.values = {}
         self.history = {"gnss_fix": {}, "gnss_velocity": {}}
         self.last_epoch = None
@@ -25,6 +31,25 @@ class Inputs:
         age = ros_now - stamp
         if not math.isfinite(age) or age < -0.1:
             return
+        if role == "imu_status" and self.config["estimator_mode"] == "eskf":
+            generation = message.get("generation")
+            if generation is not None and self.imu_generation is not None and generation != self.imu_generation:
+                self.inertial_queue.clear()
+                self.engine.reset_gap("imu_source_restarted")
+            if generation is not None:
+                self.imu_generation = generation
+        if role == "inertial":
+            if self.config["require_map_reference"] and not self.config.get("map_id"):
+                self.values[role] = (message, now-max(0.0, age))
+                return
+            if stamp <= self.last_inertial_stamp:
+                self.engine.dropped_samples += 1
+                return
+            self.last_inertial_stamp = stamp
+            if len(self.inertial_queue) >= 500:
+                self.inertial_queue.clear()
+                self.engine.reset_gap("inertial_queue_overflow")
+            self.inertial_queue.append((message, now-max(0.0, age)))
         self.values[role] = (message, now - max(0.0, age))
         if role in self.history:
             self.history[role][stamp] = self.values[role]
@@ -41,17 +66,20 @@ class Inputs:
 
     def invalidate(self, reason):
         self.reason = reason
+        if self.config["estimator_mode"] == "eskf":
+            self.engine.invalidate_gnss(reason)
+            return
         self.engine.grade = None
         self.engine.velocity_valid = False
         self.engine.stable_since = None
 
     def step(self, now):
         c = self.config
-        t = c["sensor_timeout_s"]
+        t = max(c["sensor_timeout_s"], c["fusion"]["history_s"]) if c["estimator_mode"] == "eskf" else c["sensor_timeout_s"]
         e = self.engine
-        fix = self.fresh("gnss_fix", now)
-        rtk = self.fresh("rtk_status", now)
-        velocity = self.fresh("gnss_velocity", now)
+        fix = self.fresh("gnss_fix", now, t)
+        rtk = self.fresh("rtk_status", now, t)
+        velocity = self.fresh("gnss_velocity", now, t)
         fix_at = self.values.get("gnss_fix", (None, -math.inf))[1]
         if rtk is not None:
             fp = self.history["gnss_fix"].get(rtk.get("fix_stamp_s"))
@@ -61,7 +89,13 @@ class Inputs:
             fix, fix_at = fp if fp and 0 <= now - fp[1] < t else (None, -math.inf)
             velocity = vp[0] if vp and 0 <= now - vp[1] < t else None
         if fix is None or rtk is None or velocity is None:
-            self.invalidate("gnss_stream_stale")
+            # Separate topics can deliver status before its matching position/velocity.
+            awaiting_pair = (c["estimator_mode"] == "eskf" and rtk is not None
+                             and rtk.get("state") in ("RTK_FIXED", "RTK_FLOAT")
+                             and rtk.get("receiver_quality") in (4, 5)
+                             and e.gnss_usable and 0 <= now-e.fix_at < c["sensor_timeout_s"])
+            if not awaiting_pair:
+                self.invalidate("gnss_stream_stale")
         else:
             quality = rtk.get("receiver_quality")
             v = rtk.get("velocity", {})
@@ -157,6 +191,7 @@ class Inputs:
             and c["imu"]["base_from_imu_rotation"] is not None
         )
         body_yaw = body_rate = None
+        world_body = None
         angle_at = self.values.get("imu", (None, -math.inf))[1]
         gyro_at = self.values.get("gyro", (None, -math.inf))[1]
         if mounted:
@@ -189,13 +224,29 @@ class Inputs:
                         math.atan2(world_body[1, 0], world_body[0, 0])
                         - c["imu"]["magnetic_declination_rad"]
                     )
-        ready = body_yaw is not None and (c["imu"]["quality_confirmed"] or c["imu"]["course_heading"])
+        fused = c["estimator_mode"] == "eskf"
+        ready = body_yaw is not None and (c["imu"]["quality_confirmed"] or (not fused and c["imu"]["course_heading"]))
+        if world_body is not None:
+            decl = -c["imu"]["magnetic_declination_rad"]
+            co, si = math.cos(decl), math.sin(decl)
+            world_body = np.array([[co,-si,0],[si,co,0],[0,0,1]]) @ world_body
         observation = {
             "ready": ready,
+            "body_rotation": world_body,
             "body_yaw_enu_rad": body_yaw,
             "body_yaw_rate_rps": body_rate,
             "angle_at": angle_at,
             "gyro_at": gyro_at,
         }
         e.update_imu(observation, now)
+        if fused:
+            while self.inertial_queue:
+                raw, at = self.inertial_queue.popleft()
+                frame_mismatch = imu is not None and raw.header.frame_id != imu.header.frame_id
+                if frame_mismatch or not mounted or now-at >= c["imu"]["timeout_s"] or raw.orientation_covariance[0] != -1:
+                    e.reset_gap("invalid_or_stale_inertial_stream")
+                    continue
+                v = lambda value: np.array([value.x, value.y, value.z])
+                e.raw(rotation @ v(raw.linear_acceleration), rotation @ v(raw.angular_velocity), at)
+            e.check_timeout(now)
         return observation

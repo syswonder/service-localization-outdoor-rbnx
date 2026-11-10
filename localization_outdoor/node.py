@@ -4,6 +4,7 @@ import argparse
 from collections import deque
 import json
 import math
+import numpy as np
 from pathlib import Path
 import signal
 import threading
@@ -11,7 +12,7 @@ import time
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import qos_profile_sensor_data, QoSProfile, ReliabilityPolicy
 from rclpy.signals import SignalHandlerOptions
 from geometry_msgs.msg import (
     TransformStamped,
@@ -25,6 +26,7 @@ from std_msgs.msg import String
 from tf2_msgs.msg import TFMessage
 from .configuration import validate
 from .inputs import Inputs
+from .fusion import FusionFeedback
 from .geometry import wrap
 
 
@@ -69,13 +71,14 @@ class Localizer(Node):
             "imu": Imu,
             "gyro": Vector3Stamped,
             "imu_status": String,
+            **({"inertial": Imu} if config["estimator_mode"] == "eskf" else {}),
         }
         for role, typ in types.items():
             self.create_subscription(
                 typ,
                 config["topic_remap"][role],
                 lambda m, r=role: self.receive(r, m),
-                qos_profile_sensor_data,
+                QoSProfile(depth=500, reliability=ReliabilityPolicy.BEST_EFFORT) if role == "inertial" else qos_profile_sensor_data,
             )
         self.create_timer(0.02, self.tick)
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -151,7 +154,20 @@ class Localizer(Node):
         bound = not c["require_map_reference"] or bool(c.get("map_id"))
         ready = bound and e.ready(now) and self.active and not self.conflict
         sample = e.sample(now) if bound else None
+        fused = isinstance(e, FusionFeedback)
+        fusion = e.diagnostics(now) if fused else None
+        if fusion is not None:
+            rtk, at = self.inputs.values.get("rtk_status", ({}, -math.inf))
+            age = now-at
+            fresh = 0 <= age < c["sensor_timeout_s"] and all(
+                isinstance(rtk.get(key), (int, float)) and not isinstance(rtk[key], bool)
+                and 0 <= rtk[key]+age < c["sensor_timeout_s"]
+                for key in ("fix_age_s", "measurement_age_s"))
+            fusion["rtk_grade"] = {"RTK_FIXED": "fixed", "RTK_FLOAT": "float"}.get(rtk.get("state"), "unavailable") if fresh else "unavailable"
         return {
+            "estimator_mode": c["estimator_mode"],
+            "estimate_valid": bool(sample),
+            "fusion": fusion,
             "ready": bool(ready),
             "coordinate_reference": {
                 "frame_id": "map",
@@ -181,8 +197,8 @@ class Localizer(Node):
             },
             "heading": {
                 "ready": e.heading_ready(now),
-                "source": "imu_primitive",
-                "body_yaw_enu_rad": e.imu.get("body_yaw_enu_rad"),
+                "source": "eskf_gyro_magnetic" if fused else "imu_primitive",
+                "body_yaw_enu_rad": sample["map_pose"]["yaw"] if fused and sample else e.imu.get("body_yaw_enu_rad"),
                 "angle_age_s": None
                 if "imu" not in self.inputs.values
                 else now - self.inputs.values["imu"][1],
@@ -190,13 +206,13 @@ class Localizer(Node):
             "feedback": {
                 "ready": e.feedback_ready(now),
                 "confirmed": c["feedback_confirmed"],
-                "source": str(self.inputs.values.get("rtk_status", ({},0))[0].get("velocity",{}).get("source", "unknown"))+"+imu_gyro",
-                "velocity_accuracy_source": "receiver_UBX_NAV_PVT" if self.inputs.values.get("rtk_status", ({},0))[0].get("velocity",{}).get("accuracy_source")=="UBX_NAV_PVT" else "deployment_verified_bound",
-                "speed_accuracy_mps": e.fix.get("speed_accuracy_mps") if e.fix else None,
+                "source": "inertial_estimate" if fused else str(self.inputs.values.get("rtk_status", ({},0))[0].get("velocity",{}).get("source", "unknown"))+"+imu_gyro",
+                "velocity_accuracy_source": "eskf" if fused else "receiver_UBX_NAV_PVT" if self.inputs.values.get("rtk_status", ({},0))[0].get("velocity",{}).get("accuracy_source")=="UBX_NAV_PVT" else "deployment_verified_bound",
+                "speed_accuracy_mps": sample["velocity_accuracy_mps"] if fused and sample else e.fix.get("speed_accuracy_mps") if e.fix else None,
             },
-            "position_source": "gnss_primitive",
-            "position_uncertainty_source": self.inputs.values.get("rtk_status", ({},0))[0].get("position_covariance_source", "UNKNOWN"),
-            "velocity_source": self.inputs.values.get("rtk_status", ({},0))[0].get("velocity",{}).get("source", "UNKNOWN"),
+            "position_source": "rtk_imu_eskf" if fused else "gnss_primitive",
+            "position_uncertainty_source": "eskf" if fused else self.inputs.values.get("rtk_status", ({},0))[0].get("position_covariance_source", "UNKNOWN"),
+            "velocity_source": "inertial_estimate" if fused else self.inputs.values.get("rtk_status", ({},0))[0].get("velocity",{}).get("source", "UNKNOWN"),
             "extrinsics": {
                 "ready": c["antenna_offset_confirmed"]
                 and c["imu"]["mounting_confirmed"]
@@ -234,6 +250,7 @@ class Localizer(Node):
             o.twist.twist.linear.x = v["linear_x"]
             o.twist.twist.linear.y = v["linear_y"]
             o.twist.twist.angular.z = v["angular_z"]
+            fused = isinstance(e, FusionFeedback)
             o.pose.covariance[0] = o.pose.covariance[7] = e.fix["hacc_m"] ** 2
             o.pose.covariance[35] = (
                 math.radians(self.config["imu"]["yaw_std_deg"] or 180) ** 2
@@ -244,11 +261,29 @@ class Localizer(Node):
             o.twist.covariance[35] = 1e6
             for i in (14, 21, 28):
                 o.pose.covariance[i] = o.twist.covariance[i] = 1e6
+            if fused:
+                s = e.filter.state
+                from .eskf import skew, yaw_jacobian
+                arm = np.asarray(self.config["fusion"]["imu_xyz_m"])
+                J = np.zeros((3, 15)); J[:, :3] = np.eye(3)
+                J[:, 6:9] = s.R @ skew(arm)
+                pose_cov = J @ s.P @ J.T
+                # Local frame uses the initial orientation, not map coordinates.
+                local_cov = e.local_rotation.T @ pose_cov @ e.local_rotation
+                for i in range(2):
+                    for j in range(2):
+                        o.pose.covariance[6*i+j] = float(local_cov[i,j])
+                yaw_gradient = yaw_jacobian(s.R)
+                o.pose.covariance[35] = float(yaw_gradient @ s.P[6:9,6:9] @ yaw_gradient)
+                body_cov = s.R.T @ s.P[3:6,3:6] @ s.R
+                for i in range(2):
+                    for j in range(2):
+                        o.twist.covariance[6*i+j] = float(body_cov[i,j])
             self.odom.publish(o)
             transforms = [
                 self.transform(stamp, "odom", "base_link", p["x"], p["y"], p["yaw"])
             ]
-            if e.ready(now) and not self.conflict:
+            if (fused or e.ready(now)) and self.active and not self.conflict:
                 g = sample["map_pose"]
                 angle = wrap(g["yaw"] - p["yaw"])
                 c, s = math.cos(angle), math.sin(angle)
@@ -269,7 +304,11 @@ class Localizer(Node):
                 msg.pose.pose.position.y = g["y"]
                 msg.pose.pose.orientation.z = math.sin(g["yaw"] / 2)
                 msg.pose.pose.orientation.w = math.cos(g["yaw"] / 2)
-                msg.pose.covariance = o.pose.covariance
+                msg.pose.covariance = list(o.pose.covariance)
+                if fused:
+                    for i in range(2):
+                        for j in range(2):
+                            msg.pose.covariance[6*i+j] = float(pose_cov[i,j])
                 self.pose_pub.publish(msg)
             if not self.conflict:
                 self.tf_pub.publish(TFMessage(transforms=transforms))

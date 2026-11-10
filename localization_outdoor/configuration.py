@@ -4,7 +4,19 @@ import math
 import re
 import numpy as np
 
+FUSION_DEFAULTS = {
+    "stationary_s": 5.0, "history_s": 2.0,
+    "stationary_gyro_rps": 0.03, "stationary_accel_mps2": 0.5,
+    "stationary_accel_std_mps2": 0.1, "stationary_speed_mps": 0.05,
+    "accel_noise": 0.15, "gyro_noise": 0.01,
+    "gyro_bias_walk": 0.0005, "accel_bias_walk": 0.005,
+    "max_horizontal_2sigma_m": 3.0, "max_yaw_2sigma_deg": 30.0,
+    "imu_xyz_m": [0.0, 0.0, 0.0],
+}
+
 DEFAULTS = {
+    "estimator_mode": "legacy",
+    "fusion": FUSION_DEFAULTS,
     "sensor_timeout_s": 1.0,
     "gnss_stable_s": 2.0,
     "gnss_fixed_hacc_m": 3.0,
@@ -45,6 +57,7 @@ CONTRACTS = {
     "imu": ("imu", "robonix/primitive/imu/imu"),
     "gyro": ("imu", "robonix/primitive/imu/angular_velocity"),
     "imu_status": ("imu", "robonix/primitive/imu/status"),
+    "inertial": ("imu", "robonix/primitive/imu/inertial"),
 }
 
 
@@ -75,6 +88,7 @@ def validate(raw):
         **DEFAULTS,
         **raw,
         "imu": {**DEFAULTS["imu"], **raw.get("imu", {})},
+        "fusion": {**FUSION_DEFAULTS, **raw.get("fusion", {})},
         "output_topics": {**DEFAULTS["output_topics"], **raw.get("output_topics", {})},
     }
     if raw.get("map_id") or raw.get("map_version"):
@@ -153,4 +167,16 @@ def validate(raw):
         raise ValueError("Unknown input role")
     if len(set(c["output_topics"].values())) != len(c["output_topics"]):
         raise ValueError("Output topics must be distinct")
+    if c["estimator_mode"] not in ("legacy", "eskf"):
+        raise ValueError("Unsupported estimator_mode")
+    f = c["fusion"]
+    if set(f)-FUSION_DEFAULTS.keys():
+        raise ValueError("Unknown fusion configuration")
+    for key in FUSION_DEFAULTS:
+        if key != "imu_xyz_m" and (not finite(f[key]) or f[key] <= 0):
+            raise ValueError("Invalid fusion parameter: " + key)
+    if not isinstance(f["imu_xyz_m"], list) or len(f["imu_xyz_m"]) != 3 or not all(finite(v) for v in f["imu_xyz_m"]):
+        raise ValueError("Invalid IMU translation")
+    if f["history_s"] > 2.0:
+        raise ValueError("Replay history is limited to 2 seconds")
     return c

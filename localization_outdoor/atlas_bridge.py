@@ -65,6 +65,8 @@ def init(raw):
             cleanup()
         bindings = dict(checked.get("topic_remap", {}))
         for role, (provider_role, contract) in CONTRACTS.items():
+            if role == "inertial" and checked["estimator_mode"] != "eskf":
+                continue
             if role in bindings:
                 continue
             provider = checked.get("provider_ids", {}).get(provider_role, "")
