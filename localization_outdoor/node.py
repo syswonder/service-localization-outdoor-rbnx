@@ -180,6 +180,7 @@ class Localizer(Node):
                 "antenna_xy_m": list(c["antenna_xy_m"]),
             },
             "grade": e.grade,
+            "imu_stream": self.inputs.imu_diagnostics(now),
             "fault": ("Load an outdoor map to bind localization" if not bound else None) or e.fault
             or (None if ready else self.inputs.reason or "localization_unready"),
             "ownership_conflict": self.conflict,
@@ -222,6 +223,7 @@ class Localizer(Node):
 
     def tick(self):
         now = time.monotonic()
+        self.inputs.imu_health.update(now, self.inputs.imu_stamps())
         if self.config["require_map_reference"] and not self.config.get("map_id"):
             self.status_pub.publish(String(data=json.dumps(self.snapshot(), allow_nan=False)))
             return

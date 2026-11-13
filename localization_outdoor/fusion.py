@@ -7,6 +7,7 @@ from .eskf import ErrorStateFilter, State, exp_rotation, yaw_jacobian
 from .geometry import enu, wrap
 from .quality import fix_grade
 
+IMU_GAP_S = .15
 
 class FusionFeedback:
     def __init__(self, anchor, config):
@@ -156,7 +157,7 @@ class FusionFeedback:
         self.gap_recoveries += 1
 
     def check_timeout(self, now):
-        if not self.initialized or now-self.last_raw_at < .15:
+        if not self.initialized or now-self.last_raw_at < IMU_GAP_S:
             return
         self.imu_degraded = True
         # Missing IMU samples never erase the calibrated estimator. Fresh RTK
@@ -202,7 +203,7 @@ class FusionFeedback:
             self.dropped_samples += 1
             return
         if self.last_raw_at is not None and t - self.last_raw_at >= min(
-            0.15, self.config["imu"]["timeout_s"]
+            IMU_GAP_S, self.config["imu"]["timeout_s"]
         ):
             if self.filter:
                 self.filter.insert(self.filter.state.t, 'coast', None)
