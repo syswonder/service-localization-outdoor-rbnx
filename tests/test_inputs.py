@@ -95,6 +95,20 @@ def test_valid_inputs_create_pose_without_external_odom():
     )
 
 
+def test_legacy_waits_for_matching_topics_without_resetting_valid_fix():
+    d = Inputs(config())
+    feed(d, 10.0)
+    feed(d, 10.2, "120000.20")
+    stable = d.engine.stable_since
+    status = dict(d.values["rtk_status"][0], fix_stamp_s=10.4)
+    d.put("rtk_status", status, 10.21, 10.21)
+    d.step(10.21)
+    assert d.engine.ready(10.21)
+    assert d.engine.stable_since == stable
+    d.step(10.2 + d.config["sensor_timeout_s"] + .01)
+    assert not d.engine.ready(10.2 + d.config["sensor_timeout_s"] + .01)
+
+
 def test_no_uncertainty_invention_or_unverified_north():
     d = Inputs(config())
     feed(d, 10.0)
@@ -114,7 +128,10 @@ def test_no_uncertainty_invention_or_unverified_north():
 
 
 def test_repeat_epochs_cannot_refresh_position_and_lost_angles_still_allow_measured_stop():
-    d = Inputs(config())
+    c = config()
+    c["imu"]["timeout_s"] = .5  # Exercise a configured short heading timeout.
+    c["sensor_timeout_s"] = 1.
+    d = Inputs(c)
     feed(d, 10.0)
     feed(d, 10.2, "120000.20")
     assert d.engine.ready(10.2)

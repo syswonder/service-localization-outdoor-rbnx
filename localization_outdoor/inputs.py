@@ -35,7 +35,9 @@ class Inputs:
             generation = message.get("generation")
             if generation is not None and self.imu_generation is not None and generation != self.imu_generation:
                 self.inertial_queue.clear()
-                self.engine.reset_gap("imu_source_restarted")
+                self.last_inertial_stamp = -math.inf
+                # Reconnection is a transport event, not loss of calibration.
+                self.engine.check_timeout(now)
             if generation is not None:
                 self.imu_generation = generation
         if role == "inertial":
@@ -47,8 +49,8 @@ class Inputs:
                 return
             self.last_inertial_stamp = stamp
             if len(self.inertial_queue) >= 500:
-                self.inertial_queue.clear()
-                self.engine.reset_gap("inertial_queue_overflow")
+                self.inertial_queue.popleft()
+                self.engine.dropped_samples += 1
             self.inertial_queue.append((message, now-max(0.0, age)))
         self.values[role] = (message, now - max(0.0, age))
         if role in self.history:
@@ -90,10 +92,20 @@ class Inputs:
             velocity = vp[0] if vp and 0 <= now - vp[1] < t else None
         if fix is None or rtk is None or velocity is None:
             # Separate topics can deliver status before its matching position/velocity.
-            awaiting_pair = (c["estimator_mode"] == "eskf" and rtk is not None
+            def nearby_stamp(role, stamp):
+                item = self.values.get(role)
+                return (item is not None and isinstance(stamp, (int, float))
+                        and not isinstance(stamp, bool) and math.isfinite(stamp)
+                        and abs(stamp-seconds(item[0].header.stamp)) < c["sensor_timeout_s"])
+
+            awaiting_pair = (rtk is not None
                              and rtk.get("state") in ("RTK_FIXED", "RTK_FLOAT")
                              and rtk.get("receiver_quality") in (4, 5)
-                             and e.gnss_usable and 0 <= now-e.fix_at < c["sensor_timeout_s"])
+                             and (e.gnss_usable if c["estimator_mode"] == "eskf"
+                                  else e.position_ready(now))
+                             and nearby_stamp("gnss_fix", rtk.get("fix_stamp_s"))
+                             and nearby_stamp("gnss_velocity", rtk.get("velocity", {}).get("stamp_s"))
+                             and 0 <= now-e.fix_at < c["sensor_timeout_s"])
             if not awaiting_pair:
                 self.invalidate("gnss_stream_stale")
         else:
@@ -244,7 +256,8 @@ class Inputs:
                 raw, at = self.inertial_queue.popleft()
                 frame_mismatch = imu is not None and raw.header.frame_id != imu.header.frame_id
                 if frame_mismatch or not mounted or now-at >= c["imu"]["timeout_s"] or raw.orientation_covariance[0] != -1:
-                    e.reset_gap("invalid_or_stale_inertial_stream")
+                    # Bad/old packets must not destroy an otherwise valid RTK estimate.
+                    e.dropped_samples += 1
                     continue
                 v = lambda value: np.array([value.x, value.y, value.z])
                 e.raw(rotation @ v(raw.linear_acceleration), rotation @ v(raw.angular_velocity), at)

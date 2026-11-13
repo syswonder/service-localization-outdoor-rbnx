@@ -45,14 +45,24 @@ class State:
     P: np.ndarray
     acceleration: np.ndarray
     gyro: np.ndarray
+    gnss_at: float = -math.inf
+    gnss_velocity: tuple = (0.0, 0.0)
+    stationary_since: float | None = None
+    last_zupt_at: float = -math.inf
+    zupt_count: int = 0
+    coasting: bool = False
 
 
 class ErrorStateFilter:
-    def __init__(self, state, noise, arm, history_s=2.0):
+    def __init__(self, state, noise, arm, history_s=2.0, imu_xyz=None, gnss_timeout_s=1.0):
         self.state = state
         self.noise = noise
         self.arm = np.asarray(arm, dtype=float)
+        self.imu_xyz = (
+            np.zeros(3) if imu_xyz is None else np.asarray(imu_xyz, dtype=float)
+        )
         self.history_s = history_s
+        self.gnss_timeout_s = gnss_timeout_s
         self.base = copy.deepcopy(state)
         self.events = []
         self.checkpoints = []
@@ -66,9 +76,25 @@ class ErrorStateFilter:
             raise ValueError("Filter time reversed")
         if dt <= 0:
             return
-        if dt > 0.5:
+        if dt > 0.5 and not s.coasting:
             raise ValueError("Inertial continuity lost")
         w, a = s.gyro - s.bg, s.acceleration - s.ba
+        if s.coasting:
+            # No missing acceleration/gyro is invented. Position advances
+            # at the last velocity; GNSS and heading observations still correct it.
+            s.p += s.v * dt
+            phi = np.eye(15)
+            phi[:3, 3:6] = np.eye(3)*dt
+            s.P = phi @ s.P @ phi.T
+            s.P[:3, :3] += np.eye(3)*self.noise['accel_noise']**2*dt**3/3
+            cross = np.eye(3)*self.noise['accel_noise']**2*dt**2/2
+            s.P[:3, 3:6] += cross
+            s.P[3:6, :3] += cross.T
+            s.P[3:6, 3:6] += np.eye(3)*self.noise['accel_noise']**2*dt
+            s.P[6:9, 6:9] += np.eye(3)*self.noise['gyro_noise']**2*dt
+            s.P = (s.P+s.P.T)/2
+            s.t = t
+            return
         mid = s.R @ exp_rotation(w * dt / 2)
         world_a = mid @ a + np.array([0.0, 0.0, -9.80665])
         s.p += s.v * dt + 0.5 * world_a * dt**2
@@ -114,10 +140,19 @@ class ErrorStateFilter:
         s.P = (s.P + s.P.T) / 2
 
     def apply(self, t, kind, data):
+        if kind == 'coast':
+            self.state.coasting = True
         self.propagate(t)
         s = self.state
         if kind == "inertial":
+            s.coasting = False
             s.acceleration, s.gyro = (np.array(v, dtype=float) for v in data)
+            self.stationary_update(t)
+        elif kind == "gnss_invalid":
+            s.gnss_at = -math.inf
+            s.stationary_since = None
+        elif kind == 'coast':
+            s.stationary_since = None
         elif kind == "heading":
             observed, variance = data
             # Only use magnetic yaw; gyro carries roll/pitch dynamically.
@@ -127,10 +162,26 @@ class ErrorStateFilter:
                 H = np.zeros((1, 15))
                 H[0, 6:9] = yaw_jacobian(s.R)
                 self.correct(np.array([error]), H, np.array([[variance]]))
+        elif kind == "zupt":
+            # Zero-velocity update: the body frame is stationary, so its full
+            # 3D velocity (including the otherwise unobserved vertical axis)
+            # is observed as zero at the IMU.
+            variance = data
+            w = s.gyro - s.bg
+            body_v = s.v - s.R @ np.cross(w, self.imu_xyz)
+            H = np.zeros((3, 15))
+            H[:, 3:6] = np.eye(3)
+            H[:, 6:9] = s.R @ skew(np.cross(w, self.imu_xyz))
+            H[:, 9:12] = -s.R @ skew(self.imu_xyz)
+            self.correct(-body_v, H, np.eye(3) * variance**2)
         else:
             position, velocity, hacc, sacc, reset = data
+            s.gnss_at, s.gnss_velocity = t, tuple(velocity)
+            if reset or math.hypot(*velocity) >= self.noise["stationary_speed_mps"]:
+                s.stationary_since = None
             arm_world = s.R @ self.arm
-            arm_velocity = s.R @ np.cross(s.gyro - s.bg, self.arm)
+            rate = np.zeros(3) if s.coasting else s.gyro-s.bg
+            arm_velocity = s.R @ np.cross(rate, self.arm)
             if reset:
                 s.p[:2] = np.asarray(position) - arm_world[:2]
                 s.v[:2] = np.asarray(velocity) - arm_velocity[:2]
@@ -144,13 +195,40 @@ class ErrorStateFilter:
                 H[:2, :3] = np.eye(3)[:2]
                 H[:2, 6:9] = (-s.R @ skew(self.arm))[:2]
                 H[2:, 3:6] = np.eye(3)[:2]
-                H[2:, 6:9] = (-s.R @ skew(np.cross(s.gyro - s.bg, self.arm)))[:2]
+                H[2:, 6:9] = (-s.R @ skew(np.cross(rate, self.arm)))[:2]
                 H[2:, 9:12] = (s.R @ skew(self.arm))[:2]
                 residual = np.r_[
                     np.asarray(position) - (s.p + arm_world)[:2],
                     np.asarray(velocity) - (s.v + arm_velocity)[:2],
                 ]
                 self.correct(residual, H, np.diag([hacc**2] * 2 + [sacc**2] * 2))
+
+    def stationary_update(self, t):
+        """Derive standstill corrections during replay, never retain stale decisions.
+
+        Detection state lives in checkpoints so a delayed observation rebuilds
+        every subsequent decision using the measurements available at that time.
+        """
+        s, o = self.state, self.noise
+        a, w = s.acceleration - s.ba, s.gyro - s.bg
+        world_a = s.R @ a
+        still = (
+            0 <= t - s.gnss_at < self.gnss_timeout_s
+            and math.hypot(*s.gnss_velocity) < o["stationary_speed_mps"]
+            and np.linalg.norm(w) < o["stationary_gyro_rps"]
+            and abs(np.linalg.norm(a) - 9.80665) < o["stationary_accel_mps2"]
+            and math.hypot(world_a[0], world_a[1]) < o["stationary_accel_mps2"]
+        )
+        if not still:
+            s.stationary_since = None
+            return
+        if s.stationary_since is None:
+            s.stationary_since = t
+        if (t - s.stationary_since >= o["stationary_s"] - 1e-9
+                and t - s.last_zupt_at >= 0.5 - 1e-9):
+            self.apply(t, "zupt", o["zupt_velocity_std_mps"])
+            s.last_zupt_at = t
+            s.zupt_count += 1
 
     def insert(self, t, kind, data):
         if t < self.base.t or t < self.state.t - self.history_s:

@@ -3,6 +3,17 @@ from localization_outdoor.inputs import Inputs
 from test_inputs import config, feed, header
 
 
+@pytest.mark.parametrize('accuracy', [.128, 1., 10.])
+def test_receiver_speed_uncertainty_is_not_a_readiness_threshold(accuracy):
+    c = config()
+    c['gnss_speed_accuracy_mps'] = .01  # Old deployment keys cannot re-enable it.
+    data = Inputs(c)
+    feed(data, 10., receiver_accuracy=accuracy)
+    feed(data, 10.2, receiver_accuracy=accuracy)
+    assert data.engine.ready(10.2)
+    assert data.engine.sample(10.2)['velocity_accuracy_mps'] == accuracy
+
+
 def test_receiver_velocity_integration_is_not_position_differencing():
     data = Inputs(config())
     feed(data, 10.0)
@@ -23,8 +34,8 @@ def test_day_rollover_and_frozen_status_do_not_make_new_epochs():
     before = data.engine.fix_at
     data.step(10.2)
     assert data.engine.fix_at == before
-    data.step(12.0)
-    assert not data.engine.ready(12.0)
+    data.step(13.2)
+    assert not data.engine.ready(13.2)
 
 
 def test_exact_stamp_association_rejects_mixed_messages():

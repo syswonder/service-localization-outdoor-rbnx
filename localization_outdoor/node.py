@@ -275,7 +275,7 @@ class Localizer(Node):
                         o.pose.covariance[6*i+j] = float(local_cov[i,j])
                 yaw_gradient = yaw_jacobian(s.R)
                 o.pose.covariance[35] = float(yaw_gradient @ s.P[6:9,6:9] @ yaw_gradient)
-                body_cov = s.R.T @ s.P[3:6,3:6] @ s.R
+                body_cov = np.asarray(sample["velocity_covariance"])
                 for i in range(2):
                     for j in range(2):
                         o.twist.covariance[6*i+j] = float(body_cov[i,j])

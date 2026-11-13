@@ -53,7 +53,7 @@ class RtkImuFeedback:
             for v in velocity
         )
         velocity_ok = (
-            velocity_ok and 0 < velocity[2] <= self.config["gnss_speed_accuracy_mps"]
+            velocity_ok and 0 < velocity[2]
         )
         if grade is None or not velocity_ok:
             self.grade, self.stable_since, self.velocity_valid = None, None, False
