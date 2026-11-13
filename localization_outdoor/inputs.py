@@ -14,9 +14,12 @@ def seconds(stamp):
 class Inputs:
     def __init__(self, config):
         self.config = config
-        from .fusion import FusionFeedback
+        from .fusion import FusionFeedback, IMU_GAP_S
+        from .imu_health import ImuHealth
         engine = FusionFeedback if config["estimator_mode"] == "eskf" else RtkImuFeedback
         self.engine = engine(config["origin"], config)
+        self.imu_health = ImuHealth(IMU_GAP_S if engine is FusionFeedback else config['imu']['timeout_s'],
+                                    config['imu']['timeout_s'])
         self.inertial_queue = deque()
         self.last_inertial_stamp = -math.inf
         self.imu_generation = None
@@ -25,6 +28,16 @@ class Inputs:
         self.last_epoch = None
         self.day = 0
         self.reason = "waiting_for_primitive_data"
+
+    def imu_stamps(self):
+        role = 'inertial' if self.config['estimator_mode'] == 'eskf' else 'gyro'
+        return {key: self.values.get(name, (None, None))[1]
+                for key, name in [('raw', role), ('attitude', 'imu')]}
+
+    def imu_diagnostics(self, now):
+        status = self.fresh('imu_status', now, self.config['sensor_timeout_s'])
+        connected = status.get('serial_connected') if status else None
+        return self.imu_health.snapshot(now, self.imu_stamps(), connected)
 
     def put(self, role, message, now, ros_now):
         stamp = seconds(message.header.stamp) if hasattr(message, "header") else ros_now
@@ -237,7 +250,9 @@ class Inputs:
                         - c["imu"]["magnetic_declination_rad"]
                     )
         fused = c["estimator_mode"] == "eskf"
-        ready = body_yaw is not None and (c["imu"]["quality_confirmed"] or (not fused and c["imu"]["course_heading"]))
+        # A fixed RTK solution plus a usable magnetic heading is enough to
+        # initialise; per-boot heading confirmation was removed (2026-11-13).
+        ready = body_yaw is not None
         if world_body is not None:
             decl = -c["imu"]["magnetic_declination_rad"]
             co, si = math.cos(decl), math.sin(decl)

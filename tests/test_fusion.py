@@ -157,7 +157,7 @@ def test_float_weight_and_turning():
     assert np.linalg.eigvalsh(e.filter.state.P).min() >= -1e-10
 
 
-def test_ros_input_queue_processes_each_sample_and_rejects_unverified_heading():
+def test_ros_input_queue_processes_each_sample_and_accepts_heading_without_confirmation():
     from types import SimpleNamespace as S
     from test_inputs import feed, header
     from localization_outdoor.inputs import Inputs
@@ -201,10 +201,12 @@ def test_ros_input_queue_processes_each_sample_and_rejects_unverified_heading():
         10.41,
     )
     assert d.engine.initialized and d.engine.gap_recoveries == 0
-    c["imu"]["quality_confirmed"] = False
+    # No per-boot heading-quality confirmation gate: a fixed RTK solution and
+    # a usable magnetic heading are enough (2026-11-13).
+    assert "quality_confirmed" not in c["imu"]
     e = Inputs(c)
     feed(e, 10.0)
-    assert not e.engine.imu["ready"]
+    assert e.engine.imu["ready"]
 
 
 def test_scene_timers_reset_with_each_new_fixed_measurement():

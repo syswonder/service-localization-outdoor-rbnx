@@ -39,8 +39,10 @@ DEFAULTS = {
         "mounting_confirmed": False,
         "reference_confirmed": False,
         "magnetic_declination_rad": None,
-        "quality_confirmed": False,
-        "yaw_std_deg": None,
+        # Default yaw uncertainty from the 2026-11-11 field authorisation
+        # (observed magnetic-heading error ≈ 18°, 20° assumed); no longer a
+        # per-boot confirmation gate, only an observation variance.
+        "yaw_std_deg": 20.0,
         "timeout_s": 3.0,
         "course_heading": False,
     },
@@ -126,7 +128,6 @@ def validate(raw):
     for key in (
         "mounting_confirmed",
         "reference_confirmed",
-        "quality_confirmed",
         "course_heading",
     ):
         if type(imu[key]) is not bool:
@@ -134,6 +135,8 @@ def validate(raw):
     for key in ("magnetic_declination_rad", "yaw_std_deg"):
         if imu[key] is not None and not finite(imu[key]):
             raise ValueError("Invalid " + key)
+    if imu["yaw_std_deg"] is None:
+        imu["yaw_std_deg"] = 20.0
     if not finite(imu["timeout_s"]) or not 0 < imu["timeout_s"] <= 3:
         raise ValueError("Invalid IMU timeout")
     rotation = imu["base_from_imu_rotation"]
@@ -150,10 +153,6 @@ def validate(raw):
         raise ValueError("Confirmed mounting requires rotation")
     if imu["reference_confirmed"] and imu["magnetic_declination_rad"] is None:
         raise ValueError("North reference correction required")
-    if imu["quality_confirmed"] and (
-        imu["yaw_std_deg"] is None or imu["yaw_std_deg"] <= 0
-    ):
-        raise ValueError("Measured yaw quality required")
     if c["velocity_accuracy_mps"] is not None and (
         not finite(c["velocity_accuracy_mps"]) or c["velocity_accuracy_mps"] <= 0
     ):

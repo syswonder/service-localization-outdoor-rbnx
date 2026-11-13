@@ -20,7 +20,6 @@ def config():
                 "mounting_confirmed": True,
                 "reference_confirmed": True,
                 "magnetic_declination_rad": 0.0,
-                "quality_confirmed": True,
                 "yaw_std_deg": 1.0,
             },
         }
