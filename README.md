@@ -127,3 +127,14 @@ fusion_elapsed_s 从最近一次接受的固定解计时，每条新固定解归
 `imu_stream` 提供原始采样/姿态数据龄期、数据中断/采样恢复状态、串口在线状态和最近 20 条事件。
 事件由定位定时器记录，刷新网页不丢失，服务重启清空；串口状态超时显示未知。
 该诊断不修改融合状态或导航判定，也不把采样恢复当作姿态精度已恢复。
+## base_link 路线适配
+
+新录制配置 mapping `reference_point: base_link`、`localization_provider_id: localization_outdoor`，并提供与定位相同的 `origin_wgs84`。先启动定位，再启动建图。初始采集阶段定位 `require_map_reference: false`，不绑定旧地图 ID；实测标定和定位就绪条件仍必须满足。加载地图后仍须通过 Robonix/Scene 将地图 ID、版本和原点绑定给定位。
+
+mapping 消费已有 localization/status ROS 2 能力中的 pose 与 coordinate_reference，不重复补偿杆臂；原始 GNSS 消息继续保存。状态中的 capture_ready 与 capture_block_reason 表示采集是否具备有效 RTK 位姿、航向和外参。开启首次采集时，定位可以按部署原点发布位姿和 map→odom。导航继续使用原有 ready。pose_stamp_s 是定位进程单调时钟下的样本标识，仅用于顺序和去重；status_stamp_s 为 ROS 时钟，用于传输时效检查。
+
+失效定位或原点不匹配时轨迹断段，重复样本不累计。录制、地图和规划结果持久化 reference_point，版本摘要包含该字段。旧数据缺少字段时按 gnss_antenna 解释，不能与 base_link 数据混录、合并或补采。恢复使用录制自身的原点与参考点。旧图精确转换需要历史同步姿态和实际杆臂，否则应重新录制。
+
+Navigation 和 Scene 仅对显式 base_link 路线解除零杆臂要求，仍检查原点、地图身份、零地图平移及实时 base_link 参考。不同机器人的杆臂无需相等。旧天线路线保持原有零杆臂兼容规则。
+
+现有状态话题还提供周期导航需要的同一时刻 map/odom 位姿，见 [配对定位接口](docs/navigation-cycle.md)。杆臂补偿仍采用二维模型。

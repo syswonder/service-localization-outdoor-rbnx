@@ -4,6 +4,7 @@ import argparse
 from collections import deque
 import json
 import math
+import uuid
 import numpy as np
 from pathlib import Path
 import signal
@@ -54,6 +55,7 @@ class Localizer(Node):
         self.inputs = Inputs(config)
         self.active = False
         self.last_publish = -math.inf
+        self.navigation_epoch = uuid.uuid4().hex
         self.sent = deque(maxlen=300)
         self.conflict = False
         out = config["output_topics"]
@@ -147,6 +149,25 @@ class Localizer(Node):
         self.sent.append(tf_key(t))
         return t
 
+    def capture_block_reason(self, now, sample):
+        config = self.config
+        engine = self.inputs.engine
+        if not self.active:
+            return "localization_inactive"
+        if self.conflict:
+            return "localization_tf_conflict"
+        if config["require_map_reference"] and not config.get("map_id"):
+            return "map_reference_required"
+        if engine.fault or engine.grade not in ("fixed", "float"):
+            return engine.fault or self.inputs.reason or "rtk_fix_required"
+        if not config["antenna_offset_confirmed"] or not config["imu"]["mounting_confirmed"]:
+            return "localization_extrinsics_unconfirmed"
+        if not engine.heading_ready(now):
+            return "imu_heading_not_ready"
+        if not sample:
+            return "localization_pose_not_ready"
+        return None
+
     def snapshot(self):
         now = time.monotonic()
         e = self.inputs.engine
@@ -154,6 +175,7 @@ class Localizer(Node):
         bound = not c["require_map_reference"] or bool(c.get("map_id"))
         ready = bound and e.ready(now) and self.active and not self.conflict
         sample = e.sample(now) if bound else None
+        capture_block = self.capture_block_reason(now, sample)
         fused = isinstance(e, FusionFeedback)
         fusion = e.diagnostics(now) if fused else None
         if fusion is not None:
@@ -165,10 +187,13 @@ class Localizer(Node):
                 for key in ("fix_age_s", "measurement_age_s"))
             fusion["rtk_grade"] = {"RTK_FIXED": "fixed", "RTK_FLOAT": "float"}.get(rtk.get("state"), "unavailable") if fresh else "unavailable"
         return {
+            "status_stamp_s": self.get_clock().now().nanoseconds/1e9,
             "estimator_mode": c["estimator_mode"],
             "estimate_valid": bool(sample),
             "fusion": fusion,
             "ready": bool(ready),
+            "capture_ready": capture_block is None,
+            "capture_block_reason": capture_block,
             "coordinate_reference": {
                 "frame_id": "map",
                 "axes": "east_north",
@@ -218,6 +243,19 @@ class Localizer(Node):
                 "ready": c["antenna_offset_confirmed"]
                 and c["imu"]["mounting_confirmed"]
             },
+            "navigation_sample": {
+                "schema_version": 1,
+                "stamp_s": self.get_clock().now().nanoseconds/1e9-max(0.,now-sample["stamp"]),
+                "epoch": self.navigation_epoch+":"+str(e.gap_recoveries),
+                "sample_id": format(sample["stamp"], ".9f"),
+                "map_pose": dict(sample["map_pose"]),
+                "odom_pose": dict(sample["odom_pose"]),
+                "reference_point": "base_link",
+                "local_frame": "odom",
+                "global_frame": "map",
+            } if sample and ready else None,
+            "pose_age_s": max(0., now-sample['stamp']) if sample else None,
+            "pose_stamp_s": sample['stamp'] if sample else None,
             "pose": sample["map_pose"] if sample and e.heading_ready(now) else None,
         }
 
@@ -285,7 +323,9 @@ class Localizer(Node):
             transforms = [
                 self.transform(stamp, "odom", "base_link", p["x"], p["y"], p["yaw"])
             ]
-            if (fused or e.ready(now)) and self.active and not self.conflict:
+            if self.capture_block_reason(now, sample) is None or (
+                (fused or e.ready(now)) and self.active and not self.conflict
+            ):
                 g = sample["map_pose"]
                 angle = wrap(g["yaw"] - p["yaw"])
                 c, s = math.cos(angle), math.sin(angle)
