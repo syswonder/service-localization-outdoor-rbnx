@@ -10,6 +10,10 @@ import math
 import numpy as np
 
 
+class InertialContinuityError(ValueError):
+    """A replay interval has no continuous IMU coverage and must not be integrated."""
+
+
 def skew(v):
     x, y, z = v
     return np.array([[0.0, -z, y], [z, 0.0, -x], [-y, x, 0.0]])
@@ -77,7 +81,7 @@ class ErrorStateFilter:
         if dt <= 0:
             return
         if dt > 0.5 and not s.coasting:
-            raise ValueError("Inertial continuity lost")
+            raise InertialContinuityError("Inertial continuity lost")
         w, a = s.gyro - s.bg, s.acceleration - s.ba
         if s.coasting:
             # No missing acceleration/gyro is invented. Position advances
@@ -240,19 +244,26 @@ class ErrorStateFilter:
         index = next(
             (i for i, row in enumerate(self.events) if row[0] > t), len(self.events)
         )
+        checkpoints = self.checkpoints[:]
         self.events.insert(index, event)
-        if delayed:
-            self.replays += 1
-            self.state = copy.deepcopy(
-                self.checkpoints[index - 1] if index else self.base
-            )
-            del self.checkpoints[index:]
-            for at, tag, value in self.events[index:]:
-                self.apply(at, tag, value)
+        try:
+            if delayed:
+                self.replays += 1
+                self.state = copy.deepcopy(
+                    checkpoints[index - 1] if index else self.base)
+                del self.checkpoints[index:]
+                for at, tag, value in self.events[index:]:
+                    self.apply(at, tag, value)
+                    self.checkpoints.append(copy.deepcopy(self.state))
+            else:
+                self.apply(t, kind, data)
                 self.checkpoints.append(copy.deepcopy(self.state))
-        else:
-            self.apply(t, kind, data)
-            self.checkpoints.append(copy.deepcopy(self.state))
+        except (ValueError, np.linalg.LinAlgError):
+            # A failed replay must not leave a half-rewritten history behind.
+            self.events.pop(index)
+            self.checkpoints = checkpoints
+            self.state = copy.deepcopy(checkpoints[-1] if checkpoints else self.base)
+            raise
         cutoff = self.state.t - self.history_s
         count = next(
             (i for i, row in enumerate(self.events) if row[0] >= cutoff),

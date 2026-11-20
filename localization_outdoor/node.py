@@ -28,6 +28,7 @@ from tf2_msgs.msg import TFMessage
 from .configuration import validate
 from .inputs import Inputs
 from .fusion import FusionFeedback
+from .eskf import InertialContinuityError
 from .geometry import wrap, matrix_quaternion
 
 
@@ -282,7 +283,13 @@ class Localizer(Node):
         if self.config["require_map_reference"] and not self.config.get("map_id"):
             self.status_pub.publish(String(data=json.dumps(self.snapshot(), allow_nan=False)))
             return
-        self.inputs.step(now)
+        try:
+            self.inputs.step(now)
+        except InertialContinuityError as error:
+            # Reinitialize with invalid readiness rather than extrapolating an
+            # unobserved interval or leaving the service silently dead.
+            self.get_logger().error(str(error) + "; reinitializing localization")
+            self.inputs.engine.reset_gap("inertial_continuity_lost")
         e = self.inputs.engine
         if self.count_publishers(self.odom.topic_name) > 1:
             self.conflict = True
