@@ -13,7 +13,7 @@ import time
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data, QoSProfile, ReliabilityPolicy
+from rclpy.qos import qos_profile_sensor_data, QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from rclpy.signals import SignalHandlerOptions
 from geometry_msgs.msg import (
     TransformStamped,
@@ -28,7 +28,7 @@ from tf2_msgs.msg import TFMessage
 from .configuration import validate
 from .inputs import Inputs
 from .fusion import FusionFeedback
-from .geometry import wrap
+from .geometry import wrap, matrix_quaternion
 
 
 def tf_key(t):
@@ -65,6 +65,11 @@ class Localizer(Node):
         )
         self.status_pub = self.create_publisher(String, out["status"], 10)
         self.tf_pub = self.create_publisher(TFMessage, out["tf"], 50)
+        self.imu_tf_frame = None
+        self.imu_tf_pub = (self.create_publisher(
+            TFMessage, out["tf_static"], QoSProfile(depth=1,
+                reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL)) if config["publish_imu_tf"] else None)
         self.create_subscription(TFMessage, out["tf"], self.on_tf, 100)
         types = {
             "gnss_fix": NavSatFix,
@@ -120,6 +125,18 @@ class Localizer(Node):
         threading.Thread(target=self.http.serve_forever, daemon=True).start()
 
     def receive(self, role, msg):
+        if role in ("imu", "inertial") and self.imu_tf_pub is not None:
+            frame = msg.header.frame_id
+            if frame and frame != "base_link" and frame != self.imu_tf_frame:
+                t = TransformStamped()
+                t.header.stamp = self.get_clock().now().to_msg()
+                t.header.frame_id, t.child_frame_id = "base_link", frame
+                xyz = self.config["fusion"]["imu_xyz_m"]
+                t.transform.translation.x, t.transform.translation.y, t.transform.translation.z = xyz
+                q = matrix_quaternion(self.config["imu"]["base_from_imu_rotation"])
+                t.transform.rotation.x, t.transform.rotation.y, t.transform.rotation.z, t.transform.rotation.w = q
+                self.imu_tf_pub.publish(TFMessage(transforms=[t]))
+                self.imu_tf_frame = frame
         if role in ("rtk_status", "imu_status"):
             try:
                 msg = json.loads(msg.data)

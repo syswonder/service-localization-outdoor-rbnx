@@ -34,3 +34,22 @@ def quaternion_matrix(x, y, z, w):
 
 def wrap(v):
     return math.atan2(math.sin(v), math.cos(v))
+
+
+def matrix_quaternion(matrix):
+    """Return xyzw for the configured orthonormal sensor mounting rotation."""
+    import numpy as np
+
+    r = np.asarray(matrix, dtype=float)
+    q = np.empty(4)
+    trace = float(np.trace(r))
+    if trace > 0:
+        scale = 2 * math.sqrt(1 + trace)
+        q[:] = ((r[2,1]-r[1,2])/scale, (r[0,2]-r[2,0])/scale,
+                (r[1,0]-r[0,1])/scale, scale/4)
+    else:
+        i = int(np.argmax(np.diag(r))); j, k = (i+1)%3, (i+2)%3
+        scale = 2 * math.sqrt(1+r[i,i]-r[j,j]-r[k,k])
+        q[i], q[j], q[k], q[3] = scale/4, (r[i,j]+r[j,i])/scale, (r[i,k]+r[k,i])/scale, (r[k,j]-r[j,k])/scale
+    q /= np.linalg.norm(q)
+    return tuple(float(v) for v in q)

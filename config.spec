@@ -29,6 +29,10 @@ properties:
   imu:
     type: object
     description: Measured mounting rotation, north correction, yaw uncertainty, timeout and confirmations. See configuration.py.
+  publish_imu_tf:
+    type: boolean
+    default: false
+    description: Publish the static base_link to IMU transform from imu.base_from_imu_rotation and fusion.imu_xyz_m. Enable only when no robot-description publisher already provides it.
   output_topics:
     type: object
     description: Odometry, map pose, readiness JSON, dynamic TF and TF-static topic names.

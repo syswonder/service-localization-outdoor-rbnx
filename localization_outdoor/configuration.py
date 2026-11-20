@@ -30,6 +30,7 @@ DEFAULTS = {
     "antenna_offset_confirmed": False,
     "feedback_confirmed": False,
     "require_map_reference": False,
+    "publish_imu_tf": False,
     "velocity_accuracy_mps": None,
     "velocity_accuracy_confirmed": False,
     "antenna_xy_m": [0.0, 0.0],

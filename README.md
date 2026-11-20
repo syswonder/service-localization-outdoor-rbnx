@@ -138,3 +138,7 @@ mapping 消费已有 localization/status ROS 2 能力中的 pose 与 coordinate_
 Navigation 和 Scene 仅对显式 base_link 路线解除零杆臂要求，仍检查原点、地图身份、零地图平移及实时 base_link 参考。不同机器人的杆臂无需相等。旧天线路线保持原有零杆臂兼容规则。
 
 现有状态话题还提供周期导航需要的同一时刻 map/odom 位姿，见 [配对定位接口](docs/navigation-cycle.md)。杆臂补偿仍采用二维模型。
+
+### Optional IMU mount TF
+
+`publish_imu_tf` defaults false. Enable it only when this localization instance owns the IMU mounting transform and no robot-description publisher already provides it. The static base_link-to-sensor transform uses the existing `imu.base_from_imu_rotation` and `fusion.imu_xyz_m`, without a second calibration copy. It allows terrain consumers to interpret raw IMU orientation in the body frame; it does not change the sensor message or fusion algorithm.
